@@ -1,0 +1,22 @@
+{
+  "name": "translator-linebot",
+  "version": "1.0.0",
+  "description": "LINE Bot that auto-translates messages between Traditional Chinese (zh-TW) and Indonesian",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^9.6.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "openai": "^4.67.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
