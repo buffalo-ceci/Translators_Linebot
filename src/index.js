@@ -20,21 +20,41 @@ app.get('/', (req, res) => {
 });
 
 // LINE Webhook endpoint
+// Cloud Run 在回應送出後會凍結 CPU，所以必須「處理完才回應」，不能先回 200 再背景處理
 app.post('/webhook', middleware(config), async (req, res) => {
-  try {
-    const results = await Promise.all(
-      req.body.events.map((event) => handleEvent(event))
-    );
-    res.json(results);
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(500).end();
-  }
+  await Promise.all(
+    req.body.events.map((event) => handleEvent(event).catch(console.error))
+  );
+  res.json({ status: 'ok' });
 });
+
+// 單一實例內的去重（跨實例由 replyToken 只能使用一次來保證）
+const SEEN_TTL_MS = 10 * 60 * 1000;
+const seenEvents = new Map();
+
+function isDuplicate(event) {
+  if (event.deliveryContext && event.deliveryContext.isRedelivery) return true;
+
+  const now = Date.now();
+  for (const [id, ts] of seenEvents) {
+    if (now - ts > SEEN_TTL_MS) seenEvents.delete(id);
+  }
+
+  const id = event.webhookEventId || (event.message && event.message.id);
+  if (!id) return false;
+  if (seenEvents.has(id)) return true;
+  seenEvents.set(id, now);
+  return false;
+}
 
 async function handleEvent(event) {
   // Only handle text messages
   if (event.type !== 'message' || event.message.type !== 'text') {
+    return null;
+  }
+
+  if (isDuplicate(event)) {
+    console.log(`Skip duplicate event ${event.webhookEventId || event.message.id}`);
     return null;
   }
 
@@ -45,8 +65,9 @@ async function handleEvent(event) {
 
   try {
     const translated = await handleTranslateMessage(userMessage);
+    console.log(`[translate] ${JSON.stringify(userMessage)} => ${JSON.stringify(translated)}`);
 
-    return client.replyMessage({
+    return await client.replyMessage({
       replyToken: event.replyToken,
       messages: [{ type: 'text', text: translated }],
     });
@@ -57,7 +78,7 @@ async function handleEvent(event) {
       console.error('LINE API error:', err.status, err.body);
     }
 
-    return client.replyMessage({
+    return await client.replyMessage({
       replyToken: event.replyToken,
       messages: [{
         type: 'text',
