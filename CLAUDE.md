@@ -22,7 +22,7 @@ To test webhook behavior locally, run `npm run dev` and tunnel with `ngrok http 
 
 ## Architecture
 
-**Request flow:** LINE Platform → `POST /webhook` (src/index.js) → `handleTranslateMessage()` (src/handlers/translateHandler.js) → `translateText()` (src/services/translator.js) → LINE text reply.
+**Request flow:** LINE Platform → `POST /webhook` (src/index.js) → `handleTranslateMessage()` (src/handlers/translateHandler.js) → `translateText()` (src/services/translator.js) → LINE text reply (`replyMessage`).
 
 ### Entry point — `src/index.js`
 - Express app with two routes: `GET /` (health check) and `POST /webhook` (LINE messaging webhook, wrapped in `@line/bot-sdk`'s `middleware()` for signature verification).
@@ -31,14 +31,15 @@ To test webhook behavior locally, run `npm run dev` and tunnel with `ngrok http 
 
 ### Translation service — `src/services/translator.js`
 - `detectLanguage(text)`: checks for CJK Unicode characters (`/[一-鿿㐀-䶿]/`). Any match → `'zh'` (source is Chinese, translate to Indonesian); no match → `'id'` (source is Indonesian, translate to zh-TW). This is a script-based heuristic, not a real language-detection library — it's sufficient because the only two languages in play (Chinese vs. Latin-script Indonesian) don't overlap in script.
-- `translateText(text)`: calls `detectLanguage()`, then OpenAI `gpt-4o-mini` with a direction-specific system prompt that instructs the model to output the translation only (no explanation, no original text echoed back). Returns the translated string directly — this is the bot's entire reply.
+- `translateText(text)`: calls `detectLanguage()`, then Gemini (`gemini-3.5-flash-lite` by default, override with `GEMINI_MODEL`) with a direction-specific `systemInstruction` and `temperature: 0.3` that instructs the model to output the translation only (no explanation, no original text echoed back). Retries on 429/500/503/504 and throws on empty output. Returns the translated string directly — this is the bot's entire reply.
 
 ### Handler — `src/handlers/translateHandler.js`
 - Thin pass-through: `handleTranslateMessage(userMessage)` just calls `translateText()`. Kept as a separate module (mirroring the sibling `LineBot` project's `messageHandler.js` convention) in case translation-adjacent logic (e.g. logging, rate limiting, per-user overrides) needs to grow here later.
 
 ### Deployment
-- Deployed to Zeabur (`zeabur.json` — Node build, `npm start`) or as a Docker container (`Dockerfile` — `node:20-slim`, `npm ci --omit=dev`). Both just run `node src/index.js`; there's no separate build step since this is plain CommonJS Node, no bundler/TypeScript.
-- Required env vars (see `.env.example`): `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` (this bot's own LINE Official Account — must be a different channel than the `LineBot` project's, since each LINE channel needs its own webhook), `OPENAI_API_KEY`, and `PORT`.
+- Deployed to Google Cloud Run (`gcloud run deploy translator-linebot --source . --region asia-east1`; no auto-deploy from GitHub). Also runnable on Zeabur (`zeabur.json` — Node build, `npm start`) or as a Docker container (`Dockerfile` — `node:20-slim`, `npm ci --omit=dev`). Both just run `node src/index.js`; there's no separate build step since this is plain CommonJS Node, no bundler/TypeScript.
+- Required env vars (see `.env.example`): `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN` (this bot's own LINE Official Account — must be a different channel than the `LineBot` project's, since each LINE channel needs its own webhook), `GEMINI_API_KEY`, optional `GEMINI_MODEL`, and `PORT` (Cloud Run injects it).
+- **Cloud Run constraints (learned the hard way):** the webhook handler must `await` all event handling *before* `res.json()` — Cloud Run throttles CPU after the response, so fire-and-forget work stalls. Reply with `replyMessage`, not `pushMessage`: push counts against the monthly LINE message quota (per recipient) and caused `429 You have reached your monthly limit`. The single-use `replyToken` also prevents duplicate replies across instances; `index.js` additionally dedupes by `webhookEventId` in memory per instance.
 
 ## Conventions
 
