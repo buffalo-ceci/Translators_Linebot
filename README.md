@@ -62,7 +62,7 @@ gcloud run deploy translator-linebot --source . --region asia-east1
 4. **Webhook 必須處理完才回 200**。Cloud Run 預設（以要求為依據計費）在回應送出後會凍結 CPU，若先回應再背景處理，翻譯會卡住或延遲
 5. 回覆使用 `replyMessage`（不計入 LINE 每月訊息額度，且 replyToken 只能用一次，可避免多實例重複回覆）。`pushMessage` 會計入額度且按收件人數計算，請避免使用
 
-也可以使用 Zeabur 或其他支援 Docker 的平台部署（`zeabur.json` 仍保留）。
+也可以使用其他支援 Docker 的平台部署。
 
 ## 專案結構
 
@@ -75,6 +75,5 @@ Translator_LineBot/
 │   └── services/
 │       └── translator.js        # 語言偵測 + Gemini 翻譯
 ├── Dockerfile                    # Docker 部署設定
-├── zeabur.json                   # Zeabur 部署設定
 └── .env.example                  # 環境變數範本
 ```

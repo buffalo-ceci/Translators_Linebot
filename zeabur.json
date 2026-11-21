@@ -1,5 +1,0 @@
-{
-  "$schema": "https://schema.zeabur.app/template.json",
-  "build_type": "node",
-  "start_command": "npm start"
-}
