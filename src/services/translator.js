@@ -2,6 +2,9 @@ const { GoogleGenAI } = require('@google/genai');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+// 翻譯是簡單任務，用 lite 模型降低延遲；可用環境變數 GEMINI_MODEL 覆蓋
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
 const CJK_REGEX = /[一-鿿㐀-䶿]/;
 
 function detectLanguage(text) {
@@ -28,7 +31,7 @@ async function translateText(text, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: MODEL,
         contents: text,
         config: { systemInstruction, temperature: 0.3 },
       });

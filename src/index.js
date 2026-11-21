@@ -64,8 +64,9 @@ async function handleEvent(event) {
   console.log(`[${new Date().toISOString()}] User ${userId}: ${userMessage}`);
 
   try {
+    const t0 = Date.now();
     const translated = await handleTranslateMessage(userMessage);
-    console.log(`[translate] ${JSON.stringify(userMessage)} => ${JSON.stringify(translated)}`);
+    console.log(`[translate] (${Date.now() - t0}ms) ${JSON.stringify(userMessage)} => ${JSON.stringify(translated)}`);
 
     return await client.replyMessage({
       replyToken: event.replyToken,
